@@ -1,12 +1,15 @@
+import os
 from rivertrace.main import trace
 
-file = "data/20210730/L2NDWI_S2B_MSIL1C_20210730T083559_N0301_R064_T34LDQ_20210730T110856.SAFE.nc"
-out_file = "data/20210730/path.json"
+folder = "/media/jamesrunnalls/JamesSSD/Eawag/EawagRS/Sencast/build/DIAS/output_data/Tshikapa_L1C_S2__tshikapa_2021-07-30_2021-07-30/L2NDWI"
+out_folder = "data/20210730"
 water_parameter = "swi"
 river = "data/river.geojson"
 direction = "N"
 
-trace(file, water_parameter, river, direction, threshold=0, start_jump=0, plots=True, out_file=out_file)
+files = list(filter(lambda file: "L2NDWI" in file, os.listdir(folder)))
+
+trace(os.path.join(folder, files[1]), water_parameter, river, direction, threshold=0, start_jump=0, plots=True, out_folder=out_folder)
 
 
 

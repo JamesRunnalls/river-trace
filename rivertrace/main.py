@@ -1,3 +1,4 @@
+import os
 import json
 import numpy as np
 from skimage.morphology import skeletonize, thin, remove_small_objects
@@ -16,7 +17,7 @@ class NpEncoder(json.JSONEncoder):
 
 
 def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_object_size=50, start_jump=0,
-          plots=False, small_objects=False, out_file=""):
+          plots=False, small_objects=False, out_folder=""):
     """
         River tracing for satellite images.
 
@@ -31,12 +32,15 @@ def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_
             small_object_size (int): Number of pixels that defines a small object
             start_jump (int): Initial allowable jump between disconnected water pixels
             plots (bool): Plot matrixes for each stage of the processing
-            out_file (string): Path of output file
+            out_folder (string): Path of output folder
 
         Returns:
             path (list): An array of pixel locations that define the path.
         """
     matrix, lat, lon, mask = parse_netcdf(file, variable)
+    bounds = list(np.around(np.array([np.nanmin(lat), np.nanmin(lon), np.nanmax(lat), np.nanmax(lon)]), decimals=2))
+    log("Identified image bounds: SW ({},{}) NE ({},{})".format(*bounds), indent=1)
+
     if plots:
         plot_matrix(matrix)
 
@@ -75,7 +79,8 @@ def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_
     if plots:
         plot_matrix(out)
 
-    if out_file != "":
+    if out_folder != "":
+        out_file = os.path.join(out_folder, "path_" + file.split("_")[-2] + "_" + "_".join([str(b) for b in bounds]) + ".json")
         with open(out_file, 'w') as f:
             json.dump(path, f, cls=NpEncoder)
 

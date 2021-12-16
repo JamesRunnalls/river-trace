@@ -6,6 +6,7 @@ import networkx as nx
 import geopandas as gp
 from shapely.geometry import LineString, Point, shape
 from datetime import datetime
+import matplotlib.patches as patches
 from warnings import warn
 
 import matplotlib.pyplot as plt
@@ -108,12 +109,14 @@ def inside_matrix(point, lat, lon):
 
 def classify_river(matrix, lat, lon, river, buffer=0.01):
     log("Classify water pixels as river or non river")
+    log("Reading river data from : {}".format(river), indent=1)
     r = gp.read_file(river)
     x, y = np.meshgrid(lon, lat)
-    x, y = x.flatten(), y.flatten()
+    x, y = x[matrix], y[matrix]
     points = np.vstack((x, y)).T
     l1 = LineString([(np.min(lon), np.max(lat)), (np.max(lon), np.max(lat)), (np.max(lon), np.min(lat)), (np.min(lon), np.min(lat)), (np.min(lon), np.max(lat))])
     l2 = r["geometry"][0]
+    log("Calculating intersection between river and image boundary...", indent=1)
     it = l2.intersection(l1)
     if it.type == "GeometryCollection":
         s, e = l2.boundary
@@ -137,11 +140,12 @@ def classify_river(matrix, lat, lon, river, buffer=0.01):
         x2 = find_index_nearest(lon, it[1].x)
         y2 = find_index_nearest(lat, it[1].y)
     intersects = [[y1, x1], [y2, x2]]
+    log("Located intersects: ({}, {}) and ({}, {})".format(y1, x1, y2, x2), indent=1)
+    log("Creating buffer around river path...", indent=1)
     p = Path(r["geometry"][0].buffer(buffer).exterior.coords)
+    log("Flagging {} grid points as inside or outside river buffer area...".format(len(points)), indent=1)
     grid = p.contains_points(points)
-    mask = grid.reshape(len(lat), len(lon))
-    matrix = matrix.copy()
-    matrix[~mask] = False
+    matrix[matrix] = grid
     return matrix, intersects
 
 
@@ -224,7 +228,7 @@ def shortest_path(matrix, intersects, direction, jump):
     return full_path
 
 
-def get_real_edges(matrix, node, edges, max_iter=1000):
+def get_real_edges(matrix, node, edges, max_iter=10000):
     ad = [[-1, -1], [-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [1, -1], [0, -1]]
     yl, xl = matrix.shape
     for i in range(8):
@@ -244,7 +248,7 @@ def get_real_edges(matrix, node, edges, max_iter=1000):
                 prev, curr, search = next_cell(matrix, prev, curr, yl, xl)
                 path.append(curr)
                 if count > max_iter-20:
-                    print("Count: {}, node: {}".format(count, curr))
+                    log("WARNING: Count: {}, node: {}".format(count, curr), indent=2)
             if count >= max_iter:
                 log("Iterations following path exceeded maximum allowed. Start node: {}".format(node), indent=2)
             else:

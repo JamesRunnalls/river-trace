@@ -1,26 +1,37 @@
+import os
 import json
+import numpy as np
 import matplotlib.pyplot as plt
-from rivertrace.functions import get_pixel_values, parse_netcdf, smooth
+from rivertrace.functions import get_pixel_values, parse_netcdf, smooth, log
 
-lines = [{"file": "data/20210720/reproj_idepix_subset_S2B_MSIL1C_20210720T083559_N0301_R064_T34LDQ_20210720T112210.SAFE.nc", "path": "data/20210720/path.json", "name": "20/07/2021"},
-         {"file": "data/20210725/reproj_idepix_subset_S2A_MSIL1C_20210725T083601_N0301_R064_T34LDQ_20210725T104936.SAFE.nc", "path": "data/20210725/path.json", "name": "25/07/2021"},
-         {"file": "data/20210730/reproj_idepix_subset_S2B_MSIL1C_20210730T083559_N0301_R064_T34LDQ_20210730T110856.SAFE.nc", "path": "data/20210730/path.json", "name": "30/07/2021"}]
-variable = "B8"
+dates = [{"date": "30/07/2021", "path_folder": "data/20210730", "data": {"B8":"/media/jamesrunnalls/JamesSSD/Eawag/EawagRS/Sencast/build/DIAS/output_data/Tshikapa_L1C_S2__tshikapa_2021-07-30_2021-07-30/L1P"}},
+         {"date": "25/07/2021", "path_folder": "data/20210725", "data": {"B8":"/media/jamesrunnalls/JamesSSD/Eawag/EawagRS/Sencast/build/DIAS/output_data/Tshikapa_L1C_S2__tshikapa_small_2021-07-25_2021-07-25/L1P"}},
+         {"date": "20/07/2021", "path_folder": "data/20210720", "data": {"B8":"/media/jamesrunnalls/JamesSSD/Eawag/EawagRS/Sencast/build/DIAS/output_data/Tshikapa_L1C_S2__tshikapa_small_2021-07-20_2021-07-20/L1P"}}]
 
+variables = [{"key": "B8", "label": "B8", "title": "Reflectance (842nm) values along the Chicapa River as it passes the Catoca Mine."}]
 
-fig, ax = plt.subplots(figsize=(18, 10))
-ax.set_xlabel("Pixel Length")
-ax.set_ylabel(variable)
+for variable in variables:
+    log("Creating plot for variable {}".format(variable["key"]))
+    fig, ax = plt.subplots(figsize=(18, 10))
+    ax.set_xlabel("Pixel Length")
+    ax.set_ylabel(variable["label"])
 
-for line in lines:
-    with open(line["path"]) as json_file:
-        path = json.load(json_file)
-    matrix, lat, lon, mask = parse_netcdf(line["file"], variable)
-    y = get_pixel_values(path, matrix)
-    y = smooth(y, window_len=200)
-    x = range(len(y))
-    ax.plot(x, y, label=line["name"])
-plt.title("Reflectance (842nm) values along the Chicapa River as it passes the Catoca Mine.")
-plt.legend()
-plt.tight_layout()
-plt.show()
+    for day in dates:
+        log("Processing data for {}".format(day["date"]))
+        paths = list(filter(lambda file: "path_" in file, os.listdir(day["path_folder"])))
+        paths.sort()
+        y = np.array([])
+        for path in paths:
+            with open(os.path.join(day["path_folder"], path)) as json_file:
+                p = json.load(json_file)
+            data_files = os.listdir(day["data"][variable["key"]])
+            i = [i for i, s in enumerate(data_files) if path.split("_")[1] in s][0]
+            matrix, lat, lon, mask = parse_netcdf(os.path.join(day["data"][variable["key"]], data_files[i]), variable["key"])
+            y = np.concatenate((y, get_pixel_values(p, matrix)))
+        y = smooth(y, window_len=200)
+        x = range(len(y))
+        ax.plot(x, y, label=day["date"])
+    plt.title(variable["title"])
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
