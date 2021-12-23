@@ -21,7 +21,14 @@ def log(text, indent=0):
             print(out)
 
 
+def nan_helper(y):
+    return np.isnan(y), lambda z: z.nonzero()[0]
+
+
 def smooth(x, window_len=11, window='hanning'):
+    x = np.array(x)
+    nans, y = nan_helper(x)
+    x[nans] = np.interp(y(nans), y(~nans), x[~nans])
     s = np.r_[x[window_len - 1:0:-1], x, x[-2:-window_len - 1:-1]]
     if window == 'flat':  # moving average
         w = np.ones(window_len, 'd')
@@ -31,10 +38,21 @@ def smooth(x, window_len=11, window='hanning'):
     return y
 
 
-def get_pixel_values(path, matrix):
+def get_pixel_values(path, matrix, group=0, max="None", min="None"):
     v = []
     for i in range(len(path)):
-        v.append(matrix[path[i][0], path[i][1]])
+        if group > 0:
+            values = matrix[path[i][0] - group:path[i][0] + group, path[i][1] - group:path[i][1] + group]
+            if max != "None":
+                values = values[values <= max]
+            if min != "None":
+                values = values[values >= min]
+            if len(values) == 0:
+                v.append(np.nan)
+            else:
+                v.append(np.nanmedian(values))
+        else:
+            v.append(matrix[path[i][0], path[i][1]])
     return v
 
 
@@ -43,6 +61,15 @@ def find_index_nearest(array, value):
     idx = (np.abs(array - value)).argmin()
     return idx
 
+
+def find_closest_cell(y_arr, x_arr, y, x):
+    if len(y_arr.shape) == 1:
+        idy = (np.abs(y_arr - y)).argmin()
+        idx = (np.abs(x_arr - x)).argmin()
+    else:
+        dist = ((y_arr - y)**2 + (x_arr - x)**2)**2
+        idy, idx = divmod(dist.argmin(), dist.shape[1])
+    return idy, idx
 
 def plot_graph(path, file_out, mask):
     fig, ax = plt.subplots(len(file_out), 1, figsize=(18, 15))
@@ -64,23 +91,25 @@ def plot_matrix(matrix):
     plt.show()
 
 
-def parse_netcdf(file, variable, mask=[]):
+def parse_netcdf(file, variable, mask=[], idepix=False):
     log("Parsing NetCDF: "+file)
     nc = netCDF4.Dataset(file, mode='r', format='NETCDF4_CLASSIC')
     lat = np.array(nc.variables["lat"][:])
     lon = np.array(nc.variables["lon"][:])
     matrix = np.array(nc.variables[variable][:])
-    if len(mask) == 0:
-        mask = ~np.isnan(matrix).any(axis=1)
-    matrix = matrix[mask]
-    lat = lat[mask]
+    if idepix:
+        if len(mask) == 0:
+            mask = ~np.isnan(matrix).any(axis=1)
+        matrix = matrix[mask]
+        lat = lat[mask]
     return matrix, lat, lon, mask
 
 
 def classify_water(matrix, threshold):
     log("Classify water pixels")
     binary = matrix.copy()
-    binary[binary < threshold] = np.nan
+    if str(threshold).isnumeric():
+        binary[binary < threshold] = np.nan
     binary[~np.isnan(binary)] = True
     binary[np.isnan(binary)] = False
     return binary.astype(bool)
@@ -111,7 +140,10 @@ def classify_river(matrix, lat, lon, river, buffer=0.01):
     log("Classify water pixels as river or non river")
     log("Reading river data from : {}".format(river), indent=1)
     r = gp.read_file(river)
-    x, y = np.meshgrid(lon, lat)
+    if len(lat.shape) > 1:
+        x, y = lon, lat
+    else:
+        x, y = np.meshgrid(lon, lat)
     x, y = x[matrix], y[matrix]
     points = np.vstack((x, y)).T
     l1 = LineString([(np.min(lon), np.max(lat)), (np.max(lon), np.max(lat)), (np.max(lon), np.min(lat)), (np.min(lon), np.min(lat)), (np.min(lon), np.max(lat))])
@@ -120,25 +152,18 @@ def classify_river(matrix, lat, lon, river, buffer=0.01):
     it = l2.intersection(l1)
     if it.type == "GeometryCollection":
         s, e = l2.boundary
-        x1 = find_index_nearest(lon, s.x)
-        y1 = find_index_nearest(lat, s.y)
-        x2 = find_index_nearest(lon, e.x)
-        y2 = find_index_nearest(lat, e.y)
+        y1, x1 = find_closest_cell(lat, lon, s.y, s.x)
+        y2, x2 = find_closest_cell(lat, lon, e.y, e.x)
     if it.type == "Point":
         s, e = l2.boundary
-        x1 = find_index_nearest(lon, it.x)
-        y1 = find_index_nearest(lat, it.y)
+        y1, x1 = find_closest_cell(lat, lon, it.y, it.x)
         if inside_matrix(s, lat, lon):
-            x2 = find_index_nearest(lon, s.x)
-            y2 = find_index_nearest(lat, s.y)
+            y2, x2 = find_closest_cell(lat, lon, s.y, s.x)
         else:
-            x2 = find_index_nearest(lon, e.x)
-            y2 = find_index_nearest(lat, e.y)
+            y2, x2 = find_closest_cell(lat, lon, e.y, e.x)
     elif it.type == "MultiPoint":
-        x1 = find_index_nearest(lon, it[0].x)
-        y1 = find_index_nearest(lat, it[0].y)
-        x2 = find_index_nearest(lon, it[1].x)
-        y2 = find_index_nearest(lat, it[1].y)
+        y1, x1 = find_closest_cell(lat, lon, it[-2].y, it[-2].x)
+        y2, x2 = find_closest_cell(lat, lon, it[-1].y, it[-1].x)
     intersects = [[y1, x1], [y2, x2]]
     log("Located intersects: ({}, {}) and ({}, {})".format(y1, x1, y2, x2), indent=1)
     log("Creating buffer around river path...", indent=1)

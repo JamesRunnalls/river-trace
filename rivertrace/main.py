@@ -17,7 +17,7 @@ class NpEncoder(json.JSONEncoder):
 
 
 def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_object_size=50, start_jump=0,
-          plots=False, small_objects=False, out_folder=""):
+          plots=False, small_objects=False, out_folder="", out_file_name="path"):
     """
         River tracing for satellite images.
 
@@ -33,10 +33,17 @@ def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_
             start_jump (int): Initial allowable jump between disconnected water pixels
             plots (bool): Plot matrixes for each stage of the processing
             out_folder (string): Path of output folder
+            out_file_name (string): Name of output file, defaults to path.json
 
         Returns:
             path (list): An array of pixel locations that define the path.
         """
+
+    out_file = os.path.join(out_folder, out_file_name + ".json")
+    if os.path.isfile(out_file):
+        log("Skipping path creation, output file already exists: {}".format(out_file))
+        return
+
     matrix, lat, lon, mask = parse_netcdf(file, variable)
     bounds = list(np.around(np.array([np.nanmin(lat), np.nanmin(lon), np.nanmax(lat), np.nanmax(lon)]), decimals=2))
     log("Identified image bounds: SW ({},{}) NE ({},{})".format(*bounds), indent=1)
@@ -69,18 +76,19 @@ def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_
             path = shortest_path(skel, intersects, direction, jump)
             searching = False
         except Exception as e:
-            print(e)
-            log("Failed to find path with jump value {}".format(jump))
-            jump = jump + 5
+            if "No path to" in str(e):
+                log("Failed to find path with jump value {}".format(jump))
+                jump = jump + 5
+            else:
+                raise
 
     out = matrix.copy()
     for fp in path:
-        out[fp[0], fp[1]] = 2
+        out[fp[0], fp[1]] = -100000000
     if plots:
         plot_matrix(out)
 
     if out_folder != "":
-        out_file = os.path.join(out_folder, "path_" + file.split("_")[-2] + "_" + "_".join([str(b) for b in bounds]) + ".json")
         with open(out_file, 'w') as f:
             json.dump(path, f, cls=NpEncoder)
 
