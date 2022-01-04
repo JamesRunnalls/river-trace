@@ -1,7 +1,7 @@
 import os
 from rivertrace.main import trace
 
-folder_t = "/media/jamesrunnalls/JamesSSD/Eawag/EawagRS/Sencast/build/DIAS/output_data/Tshikapa_L1C_S2_tshikapa_{}_{}_2021-07-{}_2021-07-{}/L2ACOLITE"
+folder_t = "/media/jamesrunnalls/JamesSSD/Eawag/EawagRS/Sencast/build/DIAS/output_data/Tshikapa_L1C_S2_tshikapa_{}_{}_2021-08-{}_2021-08-{}/L2ACOLITE"
 out_folder = "data/paths"
 water_parameter = "TUR_Dogliotti2015"
 river = "data/river.geojson"
@@ -12,7 +12,7 @@ runs = []
 
 for i in inputs:
     for s in range(1, i[1] + 1):
-        for d in [20, 25, 30]:
+        for d in ["04"]:
             runs.append({"d": d, "s": s, "i": i[0]})
 
 for run in runs:
