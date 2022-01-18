@@ -6,6 +6,7 @@ import networkx as nx
 import geopandas as gp
 from shapely.geometry import LineString, Point, shape
 from datetime import datetime
+from skimage.draw import line
 import matplotlib.patches as patches
 from warnings import warn
 
@@ -211,7 +212,7 @@ def get_start_end_nodes(nodes, intersects, direction):
     return start_node, end_node
 
 
-def shortest_path(matrix, intersects, direction, jump):
+def shortest_path(matrix, intersects, direction, jump, jump_path=True):
     log("Calculating path from river skeleton with jump value {}".format(jump))
     river_pixels = np.where(matrix == 1)
     nodes = []
@@ -227,7 +228,7 @@ def shortest_path(matrix, intersects, direction, jump):
 
     log("Found {} real edges, locating jump edges.".format(len(edges)), indent=1)
     for node in nodes:
-        edges = get_jump_edges(matrix, node, edges, jump=jump)
+        edges = get_jump_edges(matrix, node, edges, jump=jump, jump_path=jump_path)
 
     log("Found {} total edges, calculating shortest path.".format(len(edges)), indent=1)
     for edge in edges:
@@ -285,17 +286,21 @@ def get_real_edges(matrix, node, edges, max_iter=10000):
     return edges
 
 
-def get_jump_edges(matrix, node, edges, jump=10, jump_factor=1000):
+def get_jump_edges(matrix, node, edges, jump=10, jump_factor=1000, jump_power=3, jump_path=True):
     yl, xl = matrix.shape
     y = node[0]
     x = node[1]
     for i in range(max(y - jump, 0), min(yl, y + 1 + jump)):
         for j in range(max(x - jump, 0), min(xl, x + 1 + jump)):
             if not (i == y and j == x) and is_node(matrix, i, j):
-                count = jump_factor * ((i-y)**2+(j-x)**2)**0.5
+                count = (jump_factor * ((i-y)**2+(j-x)**2)**0.5) ** jump_power
                 start_end = ["{}_{}".format(y, x), "{}_{}".format(i, j)]
                 start_end.sort()
-                edge = [start_end[0], start_end[1], count, []]
+                if jump_path:
+                    path = [list(x) for x in list(np.transpose(np.array(line(y, x, i, j))))]
+                else:
+                    path = []
+                edge = [start_end[0], start_end[1], count, path]
                 if edge not in edges:
                     edges.append(edge)
     return edges
@@ -304,7 +309,7 @@ def get_jump_edges(matrix, node, edges, jump=10, jump_factor=1000):
 def is_node(matrix, y, x):
     yl, xl = matrix.shape
     p_sum = np.sum(matrix[max(y-1, 0):min(yl, y+2), max(0, x-1):min(xl, x+2)])
-    return matrix[y, x] == 1 and p_sum == 2 or p_sum > 3
+    return matrix[y, x] == 1 and p_sum < 3 or p_sum > 3
 
 
 def next_cell(matrix, prev, curr, yl, xl):

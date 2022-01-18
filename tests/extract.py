@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from rivertrace.functions import get_pixel_values, parse_netcdf, smooth, log
 
-folder_t = "/media/jamesrunnalls/JamesSSD/Eawag/EawagRS/Sencast/build/DIAS/output_data/Tshikapa_L1C_S2_tshikapa_{}_{}_2021-08-{}_2021-08-{}/L2ACOLITE"
+folder_t = "/media/jamesrunnalls/JamesSSD/Eawag/EawagRS/Sencast/build/DIAS/output_data/Tshikapa_L1C_S2_tshikapa_{}_{}_2021-07-{}_2021-07-{}/L2ACOLITE"
 path_folder = "data/paths"
 out_folder = "data/csv"
 variables = [{"key": "TUR_Dogliotti2015", "label": "Turbidity", "title": "Turbidity along the Chicapa River as it passes the Catoca Mine."},
@@ -14,7 +14,7 @@ variables = [{"key": "TUR_Dogliotti2015", "label": "Turbidity", "title": "Turbid
 paths = os.listdir(path_folder)
 paths.sort()
 
-for date in ["04"]:
+for date in ["20", "25", "30"]:
     dp = [k for k in paths if str(date) in k]
     lat_arr, lon_arr, tur_arr, hue_arr, box = [], [], [], [], []
     for path in dp:
@@ -25,15 +25,34 @@ for date in ["04"]:
         file = list(filter(lambda f: "L2ACOLITE" in f, os.listdir(folder)))[0]
         tur, lat, lon, mask = parse_netcdf(os.path.join(folder, file), "TUR_Dogliotti2015")
         hue, lat, lon, mask = parse_netcdf(os.path.join(folder, file), "hue_angle")
-        lat_arr = lat_arr + list(get_pixel_values(p, lat))
-        lon_arr = lon_arr + list(get_pixel_values(p, lon))
-        tur_arr = tur_arr + list(get_pixel_values(p, tur, min=0, max=10000, group=1))
-        hue_arr = hue_arr + list(get_pixel_values(p, hue, group=1))
-        box = box + ["{}_{}".format(ps[1], ps[2])] * len(p)
+        lat_arr_n = np.array(get_pixel_values(p, lat))
+        lon_arr_n = np.array(get_pixel_values(p, lon))
+        tur_arr_n = np.array(get_pixel_values(p, tur, min=0, max=10000, group=1))
+        hue_arr_n = np.array(get_pixel_values(p, hue, group=1))
+        box_n = np.array(["{}_{}".format(ps[1], ps[2])] * len(p))
+
+        if len(lat_arr) == 0:
+            lat_arr, lon_arr, tur_arr, hue_arr, box = lat_arr_n, lon_arr_n, tur_arr_n, hue_arr_n, box_n
+        else:
+            dist = 1000000000000
+            i_c = 0
+            j_c = 0
+            for i in range(1, min(50, len(lat_arr)/2)):
+                for j in range(len(lat_arr_n)):
+                    d = ((lat_arr[-i] - lat_arr_n[j])**2+(lat_arr[-i] - lat_arr_n[j])**2)**0.5
+                    if d < dist:
+                        dist = d
+                        i_c = i
+                        j_c = j
+            lat_arr = np.concatenate((lat_arr[0:-i_c], lat_arr_n[j_c:]))
+            lon_arr = np.concatenate((lon_arr[0:-i_c], lon_arr_n[j_c:]))
+            tur_arr = np.concatenate((tur_arr[0:-i_c], tur_arr_n[j_c:]))
+            hue_arr = np.concatenate((hue_arr[0:-i_c], hue_arr_n[j_c:]))
+            box = np.concatenate((box[0:-i_c], box_n[j_c:]))
+
     df = pd.DataFrame(list(zip(box, lat_arr, lon_arr, tur_arr, hue_arr)),
                       columns=['Bounding Box', 'Latitude', 'Longitude', 'Turbidity', 'Hue Angle'])
-    df = df.drop_duplicates(subset=['Latitude', 'Longitude'], keep='first').reset_index(drop=True)
-    df.to_csv(os.path.join(out_folder, "data_{}-08-2021.csv".format(date)))
+    df.to_csv(os.path.join(out_folder, "data_{}-07-2021.csv".format(date)))
 
 
 

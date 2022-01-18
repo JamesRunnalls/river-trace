@@ -17,7 +17,7 @@ class NpEncoder(json.JSONEncoder):
 
 
 def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_object_size=50, start_jump=0,
-          plots=False, small_objects=False, out_folder="", out_file_name="path"):
+          plots=False, small_objects=False, out_folder="", out_file_name="path", jump_path=True):
     """
         River tracing for satellite images.
 
@@ -34,6 +34,7 @@ def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_
             plots (bool): Plot matrixes for each stage of the processing
             out_folder (string): Path of output folder
             out_file_name (string): Name of output file, defaults to path.json
+            jump_path (bool): Include pixels across "jumped" gaps in output path
 
         Returns:
             path (list): An array of pixel locations that define the path.
@@ -73,7 +74,7 @@ def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_
     jump = start_jump
     while searching:
         try:
-            path = shortest_path(skel, intersects, direction, jump)
+            path = shortest_path(skel, intersects, direction, jump, jump_path=jump_path)
             searching = False
         except Exception as e:
             if "No path to" in str(e):
