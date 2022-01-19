@@ -12,7 +12,7 @@ runs = []
 
 for i in inputs:
     for s in range(1, i[1] + 1):
-        for d in ["20", "25", "30"]:
+        for d in ["20", "25"]:
             runs.append({"d": d, "s": s, "i": i[0]})
 
 for run in runs:
@@ -21,8 +21,8 @@ for run in runs:
         files = list(filter(lambda file: "L2ACOLITE" in file, os.listdir(folder)))
         out_file_name = "path_" + "_".join([str(run["i"]), str(run["s"]), str(run["d"])])
         for file in files:
-            trace(os.path.join(folder, file), water_parameter, river, direction, threshold="None", start_jump=0, plots=False,
-                  out_folder=out_folder, out_file_name=out_file_name)
+            trace(os.path.join(folder, file), water_parameter, river, direction, threshold=0, start_jump=0, plots=True,
+                  out_folder=out_folder, out_file_name=out_file_name, manual_classify=True)
     except Exception as e:
         print("Failed on run: ".format(run))
         print(e)

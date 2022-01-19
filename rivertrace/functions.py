@@ -1,14 +1,12 @@
-import heapq
 import netCDF4
+import math
 import numpy as np
-import seaborn as sns
 import networkx as nx
 import geopandas as gp
 from shapely.geometry import LineString, Point, shape
 from datetime import datetime
 from skimage.draw import line
-import matplotlib.patches as patches
-from warnings import warn
+from matplotlib.image import AxesImage
 
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
@@ -72,6 +70,7 @@ def find_closest_cell(y_arr, x_arr, y, x):
         idy, idx = divmod(dist.argmin(), dist.shape[1])
     return idy, idx
 
+
 def plot_graph(path, file_out, mask):
     fig, ax = plt.subplots(len(file_out), 1, figsize=(18, 15))
     fig.subplots_adjust(hspace=0.5)
@@ -85,11 +84,33 @@ def plot_graph(path, file_out, mask):
     plt.show()
 
 
-def plot_matrix(matrix):
+def plot_matrix(matrix, title=False):
     fig, ax = plt.subplots(figsize=(18, 15))
     ax.imshow(matrix, interpolation='nearest')
+    if title:
+        plt.title(title)
+    plt.set_xlabel("Longitude")
+    plt.set_ylabel("Latitude")
+    
     plt.tight_layout()
     plt.show()
+
+
+def plot_matrix_select(matrix):
+    fig, ax = plt.subplots(figsize=(18, 15))
+    plot = ax.imshow(matrix, interpolation='nearest', picker=True)
+    plt.title("Manually select any cells which you want to remove from water classification.")
+
+    def onpick(event):
+        mouseevent = event.mouseevent
+        matrix[math.floor(mouseevent.ydata), math.floor(mouseevent.xdata)] = False
+        plot.set_data(matrix)
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+
+    fig.canvas.mpl_connect('pick_event', onpick)
+    plt.show()
+    return matrix
 
 
 def parse_netcdf(file, variable, mask=[], idepix=False):

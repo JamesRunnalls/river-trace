@@ -2,7 +2,8 @@ import os
 import json
 import numpy as np
 from skimage.morphology import skeletonize, thin, remove_small_objects
-from rivertrace.functions import parse_netcdf, plot_matrix, classify_water, classify_river, shortest_path, plot_graph, log
+from rivertrace.functions import log, parse_netcdf, plot_matrix, plot_matrix_select
+from rivertrace.functions import classify_water, classify_river, shortest_path
 
 
 class NpEncoder(json.JSONEncoder):
@@ -17,7 +18,7 @@ class NpEncoder(json.JSONEncoder):
 
 
 def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_object_size=50, start_jump=0,
-          plots=False, small_objects=False, out_folder="", out_file_name="path", jump_path=True):
+          plots=False, small_objects=False, out_folder="", out_file_name="path", jump_path=True, manual_classify=False):
     """
         River tracing for satellite images.
 
@@ -35,6 +36,7 @@ def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_
             out_folder (string): Path of output folder
             out_file_name (string): Name of output file, defaults to path.json
             jump_path (bool): Include pixels across "jumped" gaps in output path
+            manual_classify (bool): Add option for manually removing points from the binary map
 
         Returns:
             path (list): An array of pixel locations that define the path.
@@ -64,6 +66,9 @@ def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_
         binary = remove_small_objects(binary, small_object_size)
         if plots:
             plot_matrix(binary)
+
+    if manual_classify:
+        binary = plot_matrix_select(binary)
 
     log("Applying thinning algorithm")
     skel = thin(binary)
