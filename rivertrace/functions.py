@@ -1,16 +1,13 @@
 import netCDF4
-import math
 import numpy as np
 import networkx as nx
 import geopandas as gp
-from shapely.geometry import LineString, Point, shape
 from datetime import datetime
 from skimage.draw import line
-from matplotlib.image import AxesImage
-
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
-
+from math import radians, cos, sin, asin, sqrt, floor
+from shapely.geometry import LineString, Point, shape
 
 def log(text, indent=0):
     text = str(text).split(r"\n")
@@ -18,6 +15,23 @@ def log(text, indent=0):
         if t != "":
             out = datetime.now().strftime("%H:%M:%S.%f") + (" " * 3 * (indent + 1)) + t
             print(out)
+
+
+def haversine(lon1, lat1, lon2, lat2):
+    """
+    Calculate the great circle distance in kilometers between two points
+    on the earth (specified in decimal degrees)
+    """
+    # convert decimal degrees to radians
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+
+    # haversine formula
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a))
+    r = 6371 # Radius of earth in kilometers. Use 3956 for miles. Determines return value units.
+    return c * r
 
 
 def nan_helper(y):
@@ -86,12 +100,11 @@ def plot_graph(path, file_out, mask):
 
 def plot_matrix(matrix, title=False):
     fig, ax = plt.subplots(figsize=(18, 15))
-    ax.imshow(matrix, interpolation='nearest')
+    plot = ax.imshow(matrix, interpolation='nearest')
     if title:
         plt.title(title)
-    plt.set_xlabel("Longitude")
-    plt.set_ylabel("Latitude")
-    
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
     plt.tight_layout()
     plt.show()
 
@@ -103,12 +116,13 @@ def plot_matrix_select(matrix):
 
     def onpick(event):
         mouseevent = event.mouseevent
-        matrix[math.floor(mouseevent.ydata), math.floor(mouseevent.xdata)] = False
+        matrix[floor(mouseevent.ydata), floor(mouseevent.xdata)] = False
         plot.set_data(matrix)
         fig.canvas.draw()
         fig.canvas.flush_events()
 
     fig.canvas.mpl_connect('pick_event', onpick)
+    plt.tight_layout()
     plt.show()
     return matrix
 

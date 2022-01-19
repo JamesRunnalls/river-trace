@@ -52,20 +52,20 @@ def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_
     log("Identified image bounds: SW ({},{}) NE ({},{})".format(*bounds), indent=1)
 
     if plots:
-        plot_matrix(matrix)
+        plot_matrix(matrix, title="Initial plot of {}".format(variable))
 
     binary = classify_water(matrix, threshold)
     if plots:
-        plot_matrix(binary)
+        plot_matrix(binary, title="Water classification plot")
 
     binary, intersects = classify_river(binary, lat, lon, river, buffer=buffer)
     if plots:
-        plot_matrix(binary)
+        plot_matrix(binary, title="River classification plot")
 
     if small_objects:
         binary = remove_small_objects(binary, small_object_size)
         if plots:
-            plot_matrix(binary)
+            plot_matrix(binary, title="Small objects removed")
 
     if manual_classify:
         binary = plot_matrix_select(binary)
@@ -73,7 +73,7 @@ def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_
     log("Applying thinning algorithm")
     skel = thin(binary)
     if plots:
-        plot_matrix(skel)
+        plot_matrix(skel, title="Results of thinning algorithm")
 
     searching = True
     jump = start_jump
@@ -92,7 +92,7 @@ def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_
     for fp in path:
         out[fp[0], fp[1]] = -100000000
     if plots:
-        plot_matrix(out)
+        plot_matrix(out, "Final path plotted on original {} data".format(variable))
 
     if out_folder != "":
         with open(out_file, 'w') as f:
