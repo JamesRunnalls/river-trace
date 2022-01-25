@@ -98,13 +98,11 @@ def plot_graph(path, file_out, mask):
     plt.show()
 
 
-def plot_matrix(matrix, title=False):
+def plot_matrix(matrix, title=False, cmap='viridis'):
     fig, ax = plt.subplots(figsize=(18, 15))
-    plot = ax.imshow(matrix, interpolation='nearest')
+    ax.imshow(matrix, interpolation='nearest', cmap=cmap)
     if title:
         plt.title(title)
-    ax.set_xlabel("Longitude")
-    ax.set_ylabel("Latitude")
     plt.tight_layout()
     plt.show()
 
@@ -127,18 +125,14 @@ def plot_matrix_select(matrix):
     return matrix
 
 
-def parse_netcdf(file, variable, mask=[], idepix=False):
+def parse_netcdf(file, var, lat, lon):
     log("Parsing NetCDF: "+file)
     nc = netCDF4.Dataset(file, mode='r', format='NETCDF4_CLASSIC')
-    lat = np.array(nc.variables["lat"][:])
-    lon = np.array(nc.variables["lon"][:])
-    matrix = np.array(nc.variables[variable][:])
-    if idepix:
-        if len(mask) == 0:
-            mask = ~np.isnan(matrix).any(axis=1)
-        matrix = matrix[mask]
-        lat = lat[mask]
-    return matrix, lat, lon, mask
+    lat = np.array(nc.variables[lat][:])
+    lon = np.array(nc.variables[lon][:])
+    matrix = np.array(nc.variables[var][:])
+    nc.close()
+    return matrix, lat, lon
 
 
 def classify_water(matrix, threshold):
@@ -200,62 +194,37 @@ def classify_river(matrix, lat, lon, river, buffer=0.01):
     elif it.type == "MultiPoint":
         y1, x1 = find_closest_cell(lat, lon, it[-2].y, it[-2].x)
         y2, x2 = find_closest_cell(lat, lon, it[-1].y, it[-1].x)
-    intersects = [[y1, x1], [y2, x2]]
+    start = [y1, x1]
+    end = [y2, x2]
     log("Located intersects: ({}, {}) and ({}, {})".format(y1, x1, y2, x2), indent=1)
     log("Creating buffer around river path...", indent=1)
     p = Path(r["geometry"][0].buffer(buffer).exterior.coords)
     log("Flagging {} grid points as inside or outside river buffer area...".format(len(points)), indent=1)
     grid = p.contains_points(points)
     matrix[matrix] = grid
-    return matrix, intersects
+    return matrix, start, end
 
 
-def get_start_end_nodes(nodes, intersects, direction):
+def get_start_end_nodes(nodes, start, end):
     nodes = np.asarray(nodes)
-    dist_1 = np.sum((nodes - intersects[0]) ** 2, axis=1)
-    dist_2 = np.sum((nodes - intersects[1]) ** 2, axis=1)
+    dist_1 = np.sum((nodes - start) ** 2, axis=1)
+    dist_2 = np.sum((nodes - end) ** 2, axis=1)
     node1 = nodes[np.argmin(dist_1)]
     node2 = nodes[np.argmin(dist_2)]
-    if node1[0] > node2[0]:
-        if direction == "N":
-            start_node = "{}_{}".format(node1[0], node1[1])
-            end_node = "{}_{}".format(node2[0], node2[1])
-        elif direction == "S":
-            start_node = "{}_{}".format(node2[0], node2[1])
-            end_node = "{}_{}".format(node1[0], node1[1])
-    elif node2[0] > node1[0]:
-        if direction == "S":
-            start_node = "{}_{}".format(node1[0], node1[1])
-            end_node = "{}_{}".format(node2[0], node2[1])
-        elif direction == "N":
-            start_node = "{}_{}".format(node2[0], node2[1])
-            end_node = "{}_{}".format(node1[0], node1[1])
-    elif node1[1] > node2[1]:
-        if direction == "W":
-            start_node = "{}_{}".format(node1[0], node1[1])
-            end_node = "{}_{}".format(node2[0], node2[1])
-        elif direction == "E":
-            start_node = "{}_{}".format(node2[0], node2[1])
-            end_node = "{}_{}".format(node1[0], node1[1])
-    elif node2[1] > node1[1]:
-        if direction == "E":
-            start_node = "{}_{}".format(node1[0], node1[1])
-            end_node = "{}_{}".format(node2[0], node2[1])
-        elif direction == "W":
-            start_node = "{}_{}".format(node2[0], node2[1])
-            end_node = "{}_{}".format(node1[0], node1[1])
+    start_node = "{}_{}".format(node1[0], node1[1])
+    end_node = "{}_{}".format(node2[0], node2[1])
     return start_node, end_node
 
 
-def shortest_path(matrix, intersects, direction, jump, jump_path=True):
+def shortest_path(matrix, start, end, jump, include_gaps=True):
     log("Calculating path from river skeleton with jump value {}".format(jump))
-    river_pixels = np.where(matrix == 1)
+    pixels = np.where(matrix == 1)
     nodes = []
     edges = []
     G = nx.MultiGraph()
-    for i in range(len(river_pixels[0])):
-        if is_node(matrix, river_pixels[0][i], river_pixels[1][i]):
-            nodes.append([river_pixels[0][i], river_pixels[1][i]])
+    for i in range(len(pixels[0])):
+        if is_node(matrix, pixels[0][i], pixels[1][i]):
+            nodes.append([pixels[0][i], pixels[1][i]])
 
     log("Found {} nodes, locating real edges.".format(len(nodes)), indent=1)
     for node in nodes:
@@ -263,13 +232,13 @@ def shortest_path(matrix, intersects, direction, jump, jump_path=True):
 
     log("Found {} real edges, locating jump edges.".format(len(edges)), indent=1)
     for node in nodes:
-        edges = get_jump_edges(matrix, node, edges, jump=jump, jump_path=jump_path)
+        edges = get_jump_edges(matrix, node, edges, jump=jump, include_gaps=include_gaps)
 
     log("Found {} total edges, calculating shortest path.".format(len(edges)), indent=1)
     for edge in edges:
         G.add_edge(edge[0], edge[1], weight=edge[2])
 
-    start_node, end_node = get_start_end_nodes(nodes, intersects, direction)
+    start_node, end_node = get_start_end_nodes(nodes, start, end)
     log("Identified start ({}) and end ({}) nodes".format(start_node, end_node), indent=1)
 
     path = nx.dijkstra_path(G, start_node, end_node)
@@ -283,7 +252,8 @@ def shortest_path(matrix, intersects, direction, jump, jump_path=True):
                 if len(p) > 0:
                     if "{}_{}".format(p[0][0], p[0][1]) != path[i-1]:
                         p.reverse()
-                    p.pop(0)
+                    if len(full_path) > 0 and full_path[-1] == p[0]:
+                        p.pop(0)
                     full_path = full_path + p
                 break
     return full_path
@@ -292,14 +262,14 @@ def shortest_path(matrix, intersects, direction, jump, jump_path=True):
 def get_real_edges(matrix, node, edges, max_iter=10000):
     ad = [[-1, -1], [-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [1, -1], [0, -1]]
     yl, xl = matrix.shape
-    for i in range(8):
+    for i in range(len(ad)):
         count = 0
         path = [node]
         search = True
         y = node[0]+ad[i][0]
         x = node[1]+ad[i][1]
         if x < 0 or x > xl - 1 or y < 0 or y > yl - 1:
-            break
+            continue
         if matrix[y, x]:
             prev = node
             curr = [y, x]
@@ -321,7 +291,7 @@ def get_real_edges(matrix, node, edges, max_iter=10000):
     return edges
 
 
-def get_jump_edges(matrix, node, edges, jump=10, jump_factor=1000, jump_power=3, jump_path=True):
+def get_jump_edges(matrix, node, edges, jump=10, jump_factor=1000, jump_power=3, include_gaps=True):
     yl, xl = matrix.shape
     y = node[0]
     x = node[1]
@@ -331,7 +301,7 @@ def get_jump_edges(matrix, node, edges, jump=10, jump_factor=1000, jump_power=3,
                 count = (jump_factor * ((i-y)**2+(j-x)**2)**0.5) ** jump_power
                 start_end = ["{}_{}".format(y, x), "{}_{}".format(i, j)]
                 start_end.sort()
-                if jump_path:
+                if include_gaps:
                     path = [list(x) for x in list(np.transpose(np.array(line(y, x, i, j))))]
                 else:
                     path = []

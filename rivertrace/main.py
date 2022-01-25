@@ -1,9 +1,8 @@
 import os
 import json
 import numpy as np
-from skimage.morphology import skeletonize, thin, remove_small_objects
-from rivertrace.functions import log, parse_netcdf, plot_matrix, plot_matrix_select
-from rivertrace.functions import classify_water, classify_river, shortest_path
+from skimage.morphology import thin
+from rivertrace.functions import log, shortest_path
 
 
 class NpEncoder(json.JSONEncoder):
@@ -17,69 +16,67 @@ class NpEncoder(json.JSONEncoder):
         return super(NpEncoder, self).default(obj)
 
 
-def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_object_size=50, start_jump=0,
-          plots=False, small_objects=False, out_folder="", out_file_name="path", jump_path=True, manual_classify=False):
+def check_inputs(matrix, start, end, save_path, include_gaps):
+    if not isinstance(matrix, np.ndarray):
+        raise ValueError("Input matrix must be a numpy array")
+    if matrix.ndim != 2:
+        raise ValueError("Input matrix must have two dimensions")
+    if len(matrix[(matrix != 1) & (matrix != 0)]) != 0:
+        raise ValueError("Input matrix must be binary")
+
+    try:
+        s_y = int(start[0])
+        s_x = int(start[1])
+    except:
+        raise ValueError ("Unable to access start pixel co-ordinates")
+    try:
+        e_y = int(end[0])
+        e_x = int(end[1])
+    except:
+        raise ValueError ("Unable to access start pixel co-ordinates")
+    if not 0 <= s_y < matrix.shape[0]:
+        raise ValueError("Start pixel y co-ordinate out of input matrix bounds")
+    if not 0 <= s_x < matrix.shape[1]:
+        raise ValueError("Start pixel x co-ordinate out of input matrix bounds")
+    if not 0 <= e_y < matrix.shape[0]:
+        raise ValueError("End pixel y co-ordinate out of input matrix bounds")
+    if not 0 <= e_x < matrix.shape[1]:
+        raise ValueError("End pixel x co-ordinate out of input matrix bounds")
+
+    if not isinstance(save_path, str):
+        raise ValueError("save_path must be a string")
+    if not (os.path.isdir(os.path.dirname(save_path)) or save_path == ""):
+        raise ValueError("save_path output folder does not exist")
+
+    if not isinstance(include_gaps, bool):
+        raise ValueError("include gaps must be a bool")
+
+
+def trace(matrix, start, end, save_path="", include_gaps=True):
     """
         River tracing for satellite images.
 
         Parameters:
-            file (string): Input satellite image that contains the water detection variable
-            variable (string): Name of the variables that defines the water detection layer
-            river (string): Path to geojson linestring that defines the rough path of the river
-            direction (string): General direction of the river, options N, S, E, W.
-            threshold (float): Minimum value that defines a water pixel in the water detection layer
-            buffer (float): Distance (in units of lat, lon) from rough path of river that defines a river pixel
-            small_objects (bool): Whether to remove small objects
-            small_object_size (int): Number of pixels that defines a small object
-            start_jump (int): Initial allowable jump between disconnected water pixels
-            plots (bool): Plot matrixes for each stage of the processing
-            out_folder (string): Path of output folder
-            out_file_name (string): Name of output file, defaults to path.json
-            jump_path (bool): Include pixels across "jumped" gaps in output path
-            manual_classify (bool): Add option for manually removing points from the binary map
-
+            matrix (np.array): 2D numpy binary array where 1 identifies river pixels
+            start ([y, x]): Pixel coordinates for starting pixel
+            end ([y, x]): Pixel coordinates for end pixel
+            save_path (string): Path of output file, defaults no output
+            include_gaps (bool): Include gaps between path sections in path
         Returns:
             path (list): An array of pixel locations that define the path.
         """
 
-    out_file = os.path.join(out_folder, out_file_name + ".json")
-    if os.path.isfile(out_file):
-        log("Skipping path creation, output file already exists: {}".format(out_file))
-        return
+    check_inputs(matrix, start, end, save_path, include_gaps)
 
-    matrix, lat, lon, mask = parse_netcdf(file, variable)
-    bounds = list(np.around(np.array([np.nanmin(lat), np.nanmin(lon), np.nanmax(lat), np.nanmax(lon)]), decimals=2))
-    log("Identified image bounds: SW ({},{}) NE ({},{})".format(*bounds), indent=1)
+    log("Applying morphological thinning to binary matrix")
+    skel = thin(matrix)
 
-    if plots:
-        plot_matrix(matrix, title="Initial plot of {}".format(variable))
-
-    binary = classify_water(matrix, threshold)
-    if plots:
-        plot_matrix(binary, title="Water classification plot")
-
-    binary, intersects = classify_river(binary, lat, lon, river, buffer=buffer)
-    if plots:
-        plot_matrix(binary, title="River classification plot")
-
-    if small_objects:
-        binary = remove_small_objects(binary, small_object_size)
-        if plots:
-            plot_matrix(binary, title="Small objects removed")
-
-    if manual_classify:
-        binary = plot_matrix_select(binary)
-
-    log("Applying thinning algorithm")
-    skel = thin(binary)
-    if plots:
-        plot_matrix(skel, title="Results of thinning algorithm")
-
+    log("Converting thinned map to nodes and edges and searching for shortest path")
     searching = True
-    jump = start_jump
+    jump = 0
     while searching:
         try:
-            path = shortest_path(skel, intersects, direction, jump, jump_path=jump_path)
+            path = shortest_path(skel, start, end, jump, include_gaps=include_gaps)
             searching = False
         except Exception as e:
             if "No path to" in str(e):
@@ -87,16 +84,8 @@ def trace(file, variable, river, direction="N", threshold=0, buffer=0.01, small_
                 jump = jump + 5
             else:
                 raise
-
-    out = matrix.copy()
-    for fp in path:
-        out[fp[0], fp[1]] = -100000000
-    if plots:
-        plot_matrix(out, "Final path plotted on original {} data".format(variable))
-
-    if out_folder != "":
-        with open(out_file, 'w') as f:
-            json.dump(path, f, cls=NpEncoder)
-
     log("River trace complete.")
     return path
+
+
+
