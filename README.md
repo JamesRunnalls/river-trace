@@ -64,3 +64,6 @@ for the initial morphological thinning of the binary matrix. This outputs a 1px 
 This centerline is abstracted to nodes and edges and [networkx](https://networkx.org/) is used to calculate the dijkstra (shortest) path through the network. This is the re-assembled as complete path. 
 For some rivers there may be gaps in the water surface due to clouds/ bridges/ vegetation, so where a complete path is not avaialble the algorithm progressively allows greater and greater "jumps" between connected river sections. 
 
+## Projects
+
+See the following [repository](https://github.com/JamesRunnalls/tailings-dam-failures) for examples of where river trace has been used to track river pollution events from tailings dam failures.
