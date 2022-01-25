@@ -166,7 +166,22 @@ def inside_matrix(point, lat, lon):
     return np.min(lon) < point.x < np.max(lon) and np.min(lat) < point.y < np.max(lat)
 
 
-def classify_river(matrix, lat, lon, river, buffer=0.01):
+def get_start_end(y1, x1, y2, x2, direction):
+    if direction not in ["N", "S", "E", "W"]:
+        raise ValueError("Unrecognised direction {} please choose from N, E, S, W.".format(direction))
+    start, end = [y1, x1], [y2, x2]
+    if direction == "N" and y2 > y1:
+        start, end = [y2, x2], [y1, x1]
+    elif direction == "S" and y2 < y1:
+        start, end = [y2, x2], [y1, x1]
+    elif direction == "E" and x2 < x1:
+        start, end = [y2, x2], [y1, x1]
+    elif direction == "W" and x2 > x1:
+        start, end = [y2, x2], [y1, x1]
+    return start, end
+
+
+def classify_river(matrix, lat, lon, river, buffer=0.01, direction="N"):
     log("Classify water pixels as river or non river")
     log("Reading river data from : {}".format(river), indent=1)
     r = gp.read_file(river)
@@ -194,8 +209,9 @@ def classify_river(matrix, lat, lon, river, buffer=0.01):
     elif it.type == "MultiPoint":
         y1, x1 = find_closest_cell(lat, lon, it[-2].y, it[-2].x)
         y2, x2 = find_closest_cell(lat, lon, it[-1].y, it[-1].x)
-    start = [y1, x1]
-    end = [y2, x2]
+
+    start, end = get_start_end(y1, x1, y2, x2, direction)
+
     log("Located intersects: ({}, {}) and ({}, {})".format(y1, x1, y2, x2), indent=1)
     log("Creating buffer around river path...", indent=1)
     p = Path(r["geometry"][0].buffer(buffer).exterior.coords)
