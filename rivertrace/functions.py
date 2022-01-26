@@ -268,7 +268,7 @@ def shortest_path(matrix, start, end, jump, include_gaps=True):
                 if len(p) > 0:
                     if "{}_{}".format(p[0][0], p[0][1]) != path[i-1]:
                         p.reverse()
-                    if len(full_path) > 0 and full_path[-1] == p[0]:
+                    while len(full_path) > 0 and len(p) > 0 and full_path[-1] == p[0]:
                         p.pop(0)
                     full_path = full_path + p
                 break
@@ -301,6 +301,8 @@ def get_real_edges(matrix, node, edges, max_iter=10000):
             else:
                 start_end = ["{}_{}".format(node[0], node[1]), "{}_{}".format(curr[0], curr[1])]
                 start_end.sort()
+                while len(path) > 1 and path[-1] == path[-2]:
+                    path.pop(-1)
                 edge = [start_end[0], start_end[1], count, path]
                 if edge not in edges:
                     edges.append(edge)
