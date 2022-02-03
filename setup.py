@@ -10,9 +10,10 @@ with open('LICENSE') as f:
 
 setup(
     name='rivertrace',
-    version='0.1.0',
+    version='0.0.2',
     description='Identifies rivers in satellite images and generates a path of pixel values along its length.',
     long_description=readme,
+    long_description_content_type='text/markdown',
     author='James Runnalls',
     author_email='runnalls.james@gmail.com',
     url='https://github.com/JamesRunnalls/river-trace',

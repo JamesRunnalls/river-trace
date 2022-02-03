@@ -1,5 +1,5 @@
 import numpy as np
-from rivertrace.main import trace
+from rivertrace import trace
 from rivertrace.functions import plot_matrix
 
 square = np.zeros((20, 20), dtype=np.uint8)

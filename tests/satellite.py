@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from rivertrace.main import trace
+from rivertrace import trace
 from rivertrace.functions import plot_matrix, parse_netcdf, log, classify_river, plot_matrix_select, get_pixel_values
 
 file = "data/turbidity.nc"

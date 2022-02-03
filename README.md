@@ -1,9 +1,15 @@
 # River Trace
 Identifies rivers in satellite images and generates a profile of pixel values along its length. 
 
-![Example river trace](docs/output.png?raw=true "Title")
+![Example river trace](https://runnalls.s3.eu-central-1.amazonaws.com/rivertrace.png)
 
 ## Installation
+
+### Install from PYPI
+
+`pip install rivertrace`
+
+### Install from GitHub
 
 - Clone the repository to your local machine using the command: 
 
@@ -23,9 +29,9 @@ River trace can be used to find the shortest path through any 2D binary array wh
 
 #### Basic Example ([source](https://github.com/JamesRunnalls/river-trace/blob/master/tests/basic.py))
 
-```
+```python
 import numpy as np
-from rivertrace.main import trace
+from rivertrace import trace
 from rivertrace.functions import plot_matrix
 
 square = np.zeros((20, 20), dtype=np.uint8)
