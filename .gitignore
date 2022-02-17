@@ -1,5 +1,4 @@
 tests/.ipynb_checkpoints
-*.nc
 .idea/
 rivertrace/__pycache__/
 build
