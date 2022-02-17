@@ -3,11 +3,15 @@ import matplotlib.pyplot as plt
 from rivertrace import trace
 from rivertrace.functions import plot_matrix, parse_netcdf, log, classify_river, plot_matrix_select, get_pixel_values
 
-file = "data/turbidity.nc"
+turb = "data/turbidity.nc"
+swi = "data/swi.nc"
 rough_river = "data/river.geojson"
 
-log("Reading data from file {}".format(file))
-matrix, lat, lon = parse_netcdf(file, "turb", "lat", "lon")
+swi_data, lat, lon = parse_netcdf(swi, "rhos_swi", "lat", "lon")
+plot_matrix(swi_data, title="SWI")
+
+log("Reading data from file {}".format(turb))
+matrix, lat, lon = parse_netcdf(turb, "turb", "lat", "lon")
 
 log("Create boolean pixel map of water/ non-water pixels")
 boolean = matrix.copy()
@@ -27,11 +31,9 @@ boolean = plot_matrix_select(boolean)
 path = trace(boolean, start, end)
 
 log("Plot results")
-output = boolean.copy()
-output = output.astype(float)
+output = swi_data.copy()
 for p in path:
     output[p[0], p[1]] = 2
-output[output == 0] = np.nan
 
 plot_matrix(output, title="River classification plot")
 

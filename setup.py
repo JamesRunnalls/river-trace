@@ -10,7 +10,7 @@ with open('LICENSE') as f:
 
 setup(
     name='rivertrace',
-    version='0.0.2',
+    version='1.0.0',
     description='Identifies rivers in satellite images and generates a path of pixel values along its length.',
     long_description=readme,
     long_description_content_type='text/markdown',
