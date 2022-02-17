@@ -5,6 +5,7 @@ import geopandas as gp
 from datetime import datetime
 from skimage.draw import line
 import matplotlib.pyplot as plt
+from matplotlib.widgets import LassoSelector
 from matplotlib.path import Path
 from math import radians, cos, sin, asin, sqrt, floor
 from shapely.geometry import LineString, Point, shape
@@ -112,14 +113,18 @@ def plot_matrix_select(matrix):
     plot = ax.imshow(matrix, interpolation='nearest', picker=True)
     plt.title("Manually select any cells which you want to remove from water classification.")
 
-    def onpick(event):
-        mouseevent = event.mouseevent
-        matrix[floor(mouseevent.ydata), floor(mouseevent.xdata)] = False
+    def onpick(verts):
+        selection = Path(verts)
+        extents = selection.get_extents()
+        for i in range(floor(extents.y0), floor(extents.y1) + 1):
+            for j in range(floor(extents.x0), floor(extents.x1) + 1):
+                if selection.contains_point((j, i)):
+                    matrix[i, j] = False
         plot.set_data(matrix)
         fig.canvas.draw()
         fig.canvas.flush_events()
 
-    fig.canvas.mpl_connect('pick_event', onpick)
+    lasso = LassoSelector(ax, onpick)
     plt.tight_layout()
     plt.show()
     return matrix
@@ -236,7 +241,9 @@ def shortest_path(matrix, start, end, jump, include_gaps=True):
     log("Calculating path from river skeleton with jump value {}".format(jump))
     pixels = np.where(matrix == 1)
     nodes = []
+    edge_nodes = []
     edges = []
+    edge_list = []
     G = nx.MultiGraph()
     for i in range(len(pixels[0])):
         if is_node(matrix, pixels[0][i], pixels[1][i]):
@@ -244,17 +251,19 @@ def shortest_path(matrix, start, end, jump, include_gaps=True):
 
     log("Found {} nodes, locating real edges.".format(len(nodes)), indent=1)
     for node in nodes:
-        edges = get_real_edges(matrix, node, edges)
+        edges, edge_list = get_real_edges(matrix, node, edges, edge_list)
 
     log("Found {} real edges, locating jump edges.".format(len(edges)), indent=1)
     for node in nodes:
-        edges = get_jump_edges(matrix, node, edges, jump=jump, include_gaps=include_gaps)
+        edges, edge_list = get_jump_edges(matrix, node, edges, edge_list, jump=jump, include_gaps=include_gaps)
 
     log("Found {} total edges, calculating shortest path.".format(len(edges)), indent=1)
     for edge in edges:
+        edge_nodes.append([int(e) for e in edge[0].split("_")])
+        edge_nodes.append([int(e) for e in edge[1].split("_")])
         G.add_edge(edge[0], edge[1], weight=edge[2])
 
-    start_node, end_node = get_start_end_nodes(nodes, start, end)
+    start_node, end_node = get_start_end_nodes(edge_nodes, start, end)
     log("Identified start ({}) and end ({}) nodes".format(start_node, end_node), indent=1)
 
     path = nx.dijkstra_path(G, start_node, end_node)
@@ -275,7 +284,7 @@ def shortest_path(matrix, start, end, jump, include_gaps=True):
     return full_path
 
 
-def get_real_edges(matrix, node, edges, max_iter=10000):
+def get_real_edges(matrix, node, edges, edge_list, max_iter=10000):
     ad = [[-1, -1], [-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [1, -1], [0, -1]]
     yl, xl = matrix.shape
     for i in range(len(ad)):
@@ -304,12 +313,14 @@ def get_real_edges(matrix, node, edges, max_iter=10000):
                 while len(path) > 1 and path[-1] == path[-2]:
                     path.pop(-1)
                 edge = [start_end[0], start_end[1], count, path]
-                if edge not in edges:
+                el = "_".join([start_end[0], start_end[1]])
+                if el not in edge_list:
+                    edge_list.append(el)
                     edges.append(edge)
-    return edges
+    return edges, edge_list
 
 
-def get_jump_edges(matrix, node, edges, jump=10, jump_factor=1000, jump_power=3, include_gaps=True):
+def get_jump_edges(matrix, node, edges, edge_list, jump=10, jump_factor=1000, jump_power=3, include_gaps=True):
     yl, xl = matrix.shape
     y = node[0]
     x = node[1]
@@ -324,9 +335,11 @@ def get_jump_edges(matrix, node, edges, jump=10, jump_factor=1000, jump_power=3,
                 else:
                     path = []
                 edge = [start_end[0], start_end[1], count, path]
-                if edge not in edges:
+                el = "_".join([start_end[0], start_end[1]])
+                if el not in edge_list:
+                    edge_list.append(el)
                     edges.append(edge)
-    return edges
+    return edges, edge_list
 
 
 def is_node(matrix, y, x):

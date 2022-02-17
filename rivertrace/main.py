@@ -84,6 +84,12 @@ def trace(matrix, start, end, save_path="", include_gaps=True):
                 jump = jump + 5
             else:
                 raise
+
+    if save_path != "":
+        log("Saving data to {}".format(save_path))
+        with open(save_path, 'w') as f:
+            json.dump(path, f, cls=NpEncoder)
+
     log("River trace complete.")
     return path
 
